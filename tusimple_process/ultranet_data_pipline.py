@@ -149,7 +149,7 @@ class ultranet_data_pipline:
 
                         lane = np.array(lanes[index])
                         if np.all(lane == -2):
-                            print('current lane {}/{} is invalid'.format(jfile, image_path))
+                            #print('current lane {}/{} is invalid'.format(jfile, image_path))
                             continue
                         valid = lane != -2
                         line_tmp = [None] * (h_sample[valid].shape[0] + lane[valid].shape[0])
@@ -157,7 +157,12 @@ class ultranet_data_pipline:
                         line_tmp[1::2] = h_sample[valid]
                         lines.append(line_tmp)
 
-                    label_image, bin_label = self.draw(lines, shape, 90, show)
+                    try:
+                        label_image, bin_label = self.draw(lines, shape, 90, show)
+                    except Exception as err:
+                        print('{}-{}'.format(err, line))
+                        continue
+
                     if self.cls_label_handle is None:
                         label_out_path = out_img_path + '/' + label_name
                         cv2.imwrite(label_out_path, label_image)
@@ -168,10 +173,16 @@ class ultranet_data_pipline:
                         src_img = cv2.imread(image_path)
                         h, w, c = src_img.shape
                         cls_label = self.cls_label_handle.create_label(label_image, w)
-                        self.cls_label_handle.rescontruct(cls_label, src_img, True)
                         src_img = cv2.resize(src_img, dsize=(800, 288), interpolation=cv2.INTER_LINEAR)
                         label_image = cv2.resize(label_image, dsize=(800, 288), interpolation=cv2.INTER_NEAREST)
-                        self.cls_label_handle.rescontruct(cls_label, src_img, True)
+
+                        if show:
+                            self.cls_label_handle.rescontruct(cls_label, src_img, True)
+                            self.cls_label_handle.rescontruct(cls_label, src_img, True)
+
+                        idx = np.where(cls_label > 255)
+                        if idx[0].shape[0] > 0 or idx[1].shape[0] > 0:
+                            print('{} beyond 255'.format(line, ))
 
                         cls_name = label_name[0:label_name.rfind('.')] + '-cls.png'
                         cv2.imwrite(out_img_path + '/' + label_name, label_image)
@@ -193,4 +204,4 @@ class ultranet_data_pipline:
 
 if __name__ == '__main__':
     lanenet_data_provide = ultranet_data_pipline(True)
-    lanenet_data_provide.generate_data('D:/work_space/tuSimpleDataSetSource/train/', 'D:/work_space/tuSimpleDataSet/train_utlra/train/')
+    lanenet_data_provide.generate_data('F:/tuSimpleDataSetSource/train/', 'F:/ultra-source-1/')

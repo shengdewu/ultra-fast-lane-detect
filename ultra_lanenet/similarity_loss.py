@@ -13,11 +13,11 @@ def similaryit_loss(label):
 
 def structural_loss(label):
     batch, rows, lanes, cells = label.get_shape()
-    prob = tf.nn.softmax(label, -1)
-    k = tf.convert_to_tensor([i for i in range(1, cells+1)], dtype=tf.float32)
+    prob = tf.nn.softmax(label[:,:,:,0:cells-1], -1)
+    k = tf.convert_to_tensor([i for i in range(1, cells)], dtype=tf.float32)
     loc = tf.reduce_sum(prob * k, -1)
     loss_all = list()
-    for i in range(rows-2):
+    for i in range(rows//2):
         loss_all.append(tf.abs((loc[:,i,:]-loc[:,i+1,:])-(loc[:,i+1,:]-loc[:,i+2,:])))
     loss = tf.concat(loss_all, 0)
     return tf.reduce_mean(loss)
