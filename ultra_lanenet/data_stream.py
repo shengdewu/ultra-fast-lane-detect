@@ -18,6 +18,7 @@ class data_stream:
         label_img_files = list()
         src_img_files = list()
         cls_img_files = list()
+        num_lanes_files = list()
         with open(self._root+'/'+self._file_name, 'r') as handler:
             while True:
                 line = handler.readline()
@@ -27,6 +28,7 @@ class data_stream:
                 img_path = self._root + '/' + names[0]
                 label_path = self._root + '/' + names[1]
                 cls_path = self._root + '/' + names[2]
+                num_lanes = '{}-{}-{}'.format(names[2][4:-4], names[0][4:-4], names[3])
                 if not os.path.exists(img_path) or not os.path.exists(label_path) or not os.path.exists(cls_path):
                     logging.info('{}-{} is not exists'.format(img_path, label_path, cls_path))
                     continue
@@ -34,13 +36,15 @@ class data_stream:
                 src_img_files.append(img_path)
                 label_img_files.append(label_path)
                 cls_img_files.append(cls_path)
+                num_lanes_files.append(num_lanes)
 
         label_img_tensor = tf.convert_to_tensor(label_img_files)
         src_img_tensor = tf.convert_to_tensor(src_img_files)
         cls_img_tensor = tf.convert_to_tensor(cls_img_files)
-        return src_img_tensor, label_img_tensor, cls_img_tensor
+        num_lanes_tensor = tf.convert_to_tensor(num_lanes_files)
+        return src_img_tensor, label_img_tensor, cls_img_tensor, num_lanes_tensor
 
-    def pre_process_img(self, src_img_tensor, label_img_tensor, cls_img_tensor):
+    def pre_process_img(self, src_img_tensor, label_img_tensor, cls_img_tensor, num_lanes_tensor):
         src_img = tf.image.decode_jpeg(tf.read_file(src_img_tensor), channels=3)
         label_img = tf.image.decode_jpeg(tf.read_file(label_img_tensor), channels=1)
         cls_img = tf.image.decode_jpeg(tf.read_file(cls_img_tensor), channels=1)
@@ -55,4 +59,4 @@ class data_stream:
         label_img = tf.cast(label_img, tf.uint8)
         src_img = tf.cast(src_img, tf.float32)
         cls_img = tf.cast(cls_img, tf.uint8)
-        return src_img, label_img, cls_img
+        return src_img, label_img, cls_img, num_lanes_tensor
