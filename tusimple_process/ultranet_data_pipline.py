@@ -42,6 +42,7 @@ class ultranet_data_pipline:
         for i in range(len(line_x) - 1):
             cv2.line(im, pt0, (int(line_x[i + 1]), int(line_y[i + 1])), (idx,), thickness=16)
             pt0 = (int(line_x[i + 1]), int(line_y[i + 1]))
+        return
 
     def draw(self, lines, shape, min_len, show=False):
         ks = np.array([self.calc_k(line, min_len) for line in lines])
@@ -91,10 +92,10 @@ class ultranet_data_pipline:
             self.draw_lane(label_image, lines[which], 4, show)
             bin_label[3] = 1
 
-        # if show:
-        #     cv2.imshow("label", label_image)
-        #     cv2.waitKey(3)
-        #     cv2.destroyAllWindows()
+        if show:
+            cv2.imshow("label", label_image)
+            cv2.waitKey()
+            cv2.destroyAllWindows()
         return label_image, bin_label
 
     def generate_data(self, data_path, out_path, show=False, shape=(720, 1280), rate=0.7):
@@ -112,8 +113,8 @@ class ultranet_data_pipline:
         if not os.path.exists(data_path):
             raise FileExistsError('{} not find data path'.format(data_path))
 
-        out_img_path = out_path + '/' + 'img'
-        self._create_path(out_img_path)
+        img_path = 'img'
+        self._create_path(out_path + '/' + img_path)
 
         json_files = [f for f in os.listdir(data_path) if f.endswith('.json')]
 
@@ -135,7 +136,7 @@ class ultranet_data_pipline:
                     raw_file = lane_dict['raw_file']
                     image_path = '{}/{}'.format(data_path, raw_file)
                     file_seg = raw_file.split('/')
-                    label_name = file_seg[-3] + '-' + file_seg[-2]+'-' + file_seg[-1][0:file_seg[-1].rfind('.')]+'.png'
+                    label_name = file_seg[-3] + '-' + file_seg[-2]+'-' + file_seg[-1][0:file_seg[-1].rfind('.')]+'-label.png'
                     image_name = file_seg[-3] + '-' + file_seg[-2]+'-' + file_seg[-1]
 
                     if not os.path.exists(image_path):
@@ -158,23 +159,21 @@ class ultranet_data_pipline:
                         lines.append(line_tmp)
 
                     try:
-                        label_image, bin_label = self.draw(lines, shape, 90, show)
+                        label_image, bin_label = self.draw(lines, shape, 90)
                     except Exception as err:
-                        print('{}-{}'.format(err, line))
+                        print('{}\n{}'.format(err, line))
                         continue
 
                     if self.cls_label_handle is None:
-                        label_out_path = out_img_path + '/' + label_name
+                        label_out_path = out_path + '/' + img_path + '/' + label_name
                         cv2.imwrite(label_out_path, label_image)
-                        image_out_path = out_img_path + '/' + image_name
+                        image_out_path = out_path + '/' + img_path + '/' + image_name
                         copyfile(image_path, image_out_path)
-                        total_files.append('img'+'/'+image_name + ' ' + 'img'+'/'+label_name + ' ' + ''.join(list(map(str, bin_label))) + '\n')
+                        total_files.append(img_path + '/' + image_name + ' ' + img_path + '/' + label_name + ' ' + ''.join(list(map(str, bin_label))) + '\n')
                     else:
                         src_img = cv2.imread(image_path)
                         h, w, c = src_img.shape
                         cls_label = self.cls_label_handle.create_label(label_image, w)
-                        src_img = cv2.resize(src_img, dsize=(800, 288), interpolation=cv2.INTER_LINEAR)
-                        label_image = cv2.resize(label_image, dsize=(800, 288), interpolation=cv2.INTER_NEAREST)
 
                         if show:
                             self.cls_label_handle.rescontruct(cls_label, src_img, True)
@@ -185,10 +184,10 @@ class ultranet_data_pipline:
                             print('{} beyond 255'.format(line, ))
 
                         cls_name = label_name[0:label_name.rfind('.')] + '-cls.png'
-                        cv2.imwrite(out_img_path + '/' + label_name, label_image)
-                        cv2.imwrite(out_img_path + '/' + cls_name, cls_label)
-                        cv2.imwrite(out_img_path + '/' + image_name, src_img)
-                        total_files.append('img/'+image_name + ' ' + 'img/'+label_name + ' ' + 'img/' + cls_name + ' ' + ''.join(list(map(str, bin_label))) + '\n')
+                        cv2.imwrite(out_path + '/' + img_path + '/' + label_name, label_image)
+                        cv2.imwrite(out_path + '/' + img_path + '/' + cls_name, cls_label)
+                        copyfile(image_path, out_path + '/' + img_path + '/' + image_name)
+                        total_files.append(img_path + '/' + image_name + ' ' + img_path + '/' + label_name + ' ' + img_path + '/' + cls_name + ' ' + ''.join(list(map(str, bin_label))) + '\n')
 
         random.shuffle(total_files)
         train_len = math.ceil(len(total_files) * rate)
