@@ -46,7 +46,7 @@ class data_stream:
         cls_img = tf.image.decode_jpeg(tf.read_file(cls_img_tensor), channels=1)
 
         src_img = tf.image.resize(src_img, (self._img_h, self._img_w), method=tf.image.ResizeMethod.BILINEAR)
-        label_img = tf.image.resize(label_img, (36, 100), method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        label_img = tf.image.resize(label_img, (self._img_h, self._img_w), method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
         cls_img.set_shape([self._label_h, self._label_w, 1])
 
         src_normal = tf.div(tf.cast(src_img, dtype=tf.float32), 255)

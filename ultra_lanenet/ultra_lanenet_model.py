@@ -5,9 +5,9 @@ import util.data_pipe
 from ultra_lanenet.data_stream import data_stream
 import tusimple_process.ultranet_comm
 import cv2
-from ultra_lanenet.similarity_loss import similaryit_loss
-from ultra_lanenet.similarity_loss import structural_loss
-from ultra_lanenet.similarity_loss import cls_loss
+import ultra_lanenet.similarity_loss
+import ultra_lanenet.similarity_loss
+import ultra_lanenet.similarity_loss
 import logging
 import numpy as np
 from tusimple_process.create_label import tusimple_label
@@ -41,21 +41,31 @@ class ultra_lane():
         return group_cls
 
     def loss(self, group_cls, label):
-        cls = cls_loss(group_cls, label, self._cells+1)
-        sim = similaryit_loss(group_cls)
-        shp = structural_loss(group_cls)
+        cls = ultra_lanenet.similarity_loss.cls_loss(group_cls, label, self._cells+1)
+        sim = ultra_lanenet.similarity_loss.similaryit_loss(group_cls)
+        shp = ultra_lanenet.similarity_loss.structural_loss(group_cls)
 
         return cls, sim, shp, tf.argmax(slim.softmax(group_cls), axis=-1)
 
     def create_train_pipe(self, pipe_handle, config, batch_size, trainable=True, reuse=False, file_name='train_files.txt'):
         train_data_handle = data_stream(config['image_path'], config['img_width'], config['img_height'], file_name)
         src_tensor, label_tensor, cls_tensor = train_data_handle.create_img_tensor()
-        train_data_handle.pre_process_img(src_tensor[0], label_tensor[0], cls_tensor[0])
+        #train_data_handle.pre_process_img(src_tensor[0], label_tensor[0], cls_tensor[0])
         src_img_train_queue, label_queue, ground_cls_queue, src_img_queue = pipe_handle.make_pipe(batch_size, (src_tensor, label_tensor, cls_tensor), train_data_handle.pre_process_img)
         group_cls = self.make_net(src_img_train_queue, trainable, reuse)
         cls_loss_tensor, sim_loss_tensor, shp_loss_tensor, predict_rows = self.loss(group_cls, ground_cls_queue)
         total_loss_tensor = cls_loss_tensor + sim_loss_tensor + shp_loss_tensor
-        return total_loss_tensor, cls_loss_tensor, sim_loss_tensor, shp_loss_tensor, src_img_queue, ground_cls_queue, predict_rows
+        tensor = dict()
+        tensor['total_loss'] = total_loss_tensor
+        tensor['cls_loss'] = cls_loss_tensor
+        tensor['sim_loss'] = sim_loss_tensor
+        tensor['shp_loss'] = shp_loss_tensor
+        tensor['src_img'] = src_img_queue
+        tensor['train_input'] = src_img_train_queue
+        tensor['ground_cls'] = ground_cls_queue
+        tensor['predict'] = predict_rows
+        tensor['label_img'] = label_queue
+        return tensor
 
     def train(self, config):
         pipe_handle = util.data_pipe.data_pipe(config['cpu_cores'])
@@ -66,26 +76,26 @@ class ultra_lane():
 
         with tf.device(config['device']):
             #train
-            total_loss, cls_loss, sim_loss, shp_loss, src_img, ground_cls, predict_cls = self.create_train_pipe(pipe_handle, config, config['batch_size'])
-            total_loss_summary = tf.summary.scalar(name='total-loss', tensor=total_loss)
-            cls_loss_summary = tf.summary.scalar(name='cls-loss', tensor=cls_loss)
+            pipe = self.create_train_pipe(pipe_handle, config, config['batch_size'])
+            total_loss_summary = tf.summary.scalar(name='total-loss', tensor=pipe['total_loss'])
+            cls_loss_summary = tf.summary.scalar(name='cls-loss', tensor=pipe['cls_loss'])
 
-            b, w, h, c = ground_cls.get_shape().as_list()
-            ground_label = tf.cast(tf.reshape(ground_cls, (b, w, h)), dtype=predict_cls.dtype)
-            correct_label = tf.cast(tf.equal(ground_label, predict_cls), dtype=tf.float32)
+            b, w, h, c = pipe['ground_cls'].get_shape().as_list()
+            ground_label = tf.cast(tf.reshape(pipe['ground_cls'], (b, w, h)), dtype=pipe['predict'].dtype)
+            correct_label = tf.cast(tf.equal(ground_label, pipe['predict']), dtype=tf.float32)
             precision = tf.reduce_sum(correct_label) / (1.0*w*h*b*c)
             precision_summary = tf.summary.scalar(name='precision', tensor=precision)
 
             global_step = tf.train.create_global_step()
             learning_rate = tf.train.exponential_decay(config['learning_rate'], global_step, config['decay_steps'], config['decay_rate'])
             optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, epsilon=config['epsilon'])
-            train_op = slim.learning.create_train_op(total_loss, optimizer)
+            train_op = slim.learning.create_train_op(pipe['total_loss'], optimizer)
             ls_summary = tf.summary.scalar(name='learning-rate', tensor=learning_rate)
 
             #valid
-            valid_total_loss, valid_cls_loss, valid_sim_loss, valid_shp_loss, valid_src_img, valid_ground_cls, valid_predict_cls = self.create_train_pipe(pipe_handle, config, config['eval_batch_size'], False, True, 'valid_files.txt')
-            val_total_loss_summary = tf.summary.scalar(name='val-total-loss', tensor=valid_total_loss)
-            val_cls_loss_summary = tf.summary.scalar(name='val-cls-loss', tensor=valid_cls_loss)
+            valid_pipe = self.create_train_pipe(pipe_handle, config, config['eval_batch_size'], False, True, 'valid_files.txt')
+            val_total_loss_summary = tf.summary.scalar(name='val-total-loss', tensor=valid_pipe['total_loss'])
+            val_cls_loss_summary = tf.summary.scalar(name='val-cls-loss', tensor=valid_pipe['cls_loss'])
 
             train_summary_op = tf.summary.merge([total_loss_summary, cls_loss_summary, ls_summary, val_total_loss_summary, val_cls_loss_summary, precision_summary])
 
@@ -98,35 +108,33 @@ class ultra_lane():
                 min_loss = float('inf')
                 for step in range(config['train_epoch']):
 
-                    _, total_loss_val, cls_loss_val, sim_loss_val, shp_loss_val, train_summary, gs, lr, src_img_val, ground_cls_val, predict_cls_val, p = \
-                        sess.run([train_op, total_loss, cls_loss, sim_loss, shp_loss, train_summary_op, global_step, learning_rate, src_img, ground_cls, predict_cls, precision])
-
-                    total_loss_1 = cls_loss_val + sim_loss_val + shp_loss_val
+                    _, total_loss, cls_loss, sim_loss, shp_loss, p, train_summary, gs, lr = \
+                        sess.run([train_op, pipe['total_loss'], pipe['cls_loss'], pipe['sim_loss'], pipe['shp_loss'], precision, train_summary_op, global_step, learning_rate])
 
                     summary_writer.add_summary(train_summary, global_step=gs)
 
-                    logging.info('train model: gs={},  loss={} {}={}+{}+{}, precision={}, lr={}'.format(gs, total_loss_val, total_loss_1, cls_loss_val, sim_loss_val, shp_loss_val, p, lr))
+                    logging.info('train model: gs={},  loss={}={}+{}+{}, precision={}, lr={}'.format(gs, total_loss, cls_loss, sim_loss, shp_loss, p, lr))
 
                     if (step + 1) % config['update_mode_freq'] == 0:
-                        valid_total_loss_val, valid_src_img_val, valid_ground_cls_val, valid_predict_cls_val = sess.run([valid_total_loss, valid_src_img, valid_ground_cls, valid_predict_cls])
-                        self.match_coordinate(valid_src_img_val.astype(np.uint8), valid_ground_cls_val, valid_predict_cls_val, save_path, step)
-                        logging.info('valid model: gs={},  loss={}, lr={}'.format(gs, valid_total_loss_val, lr))
-                        print('valid model: gs={},  loss={}, lr={}'.format(gs, valid_total_loss_val, lr))
-                        print('train model: gs={},  loss={},[{},{},{}], precision={}, lr={}'.format(gs, total_loss_val, cls_loss_val, sim_loss_val, shp_loss_val, p, lr))
-                        if min_loss > total_loss_val:
+                        valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict = sess.run([valid_pipe['total_loss'], valid_pipe['src_img'], valid_pipe['label_img'], valid_pipe['ground_cls'], valid_pipe['predict']])
+                        self.match_coordinate(valid_src_img.astype(np.uint8), val_label_img, valid_ground_cls, valid_predict, save_path, step)
+                        logging.info('valid model: gs={},  loss={}, lr={}'.format(gs, valid_total_loss, lr))
+                        print('valid model: gs={},  loss={}, lr={}'.format(gs, valid_total_loss, lr))
+                        if min_loss > total_loss:
                             saver.save(sess, model_path, global_step=gs)
-                            logging.info('update model loss from {} to {}'.format(min_loss, total_loss_val))
+                            logging.info('update model loss from {} to {}'.format(min_loss, total_loss))
 
-                    min_loss = min(min_loss, total_loss_val)
+                    min_loss = min(min_loss, total_loss)
         return
 
-    def match_coordinate(self, imgs, ground_cls, predict_cls, save_path, epoch):
-        batch, h, w, c = imgs.shape
+    def match_coordinate(self, src_img, label_img, ground_cls, predict_cls, save_path, epoch):
+        batch, h, w, c = src_img.shape
 
         for b in range(batch):
-            label_lane = self.cls_label_handle.rescontruct(ground_cls[b][:, :, 0], imgs[b].copy())
-            predict_lane = self.cls_label_handle.rescontruct(predict_cls[b], imgs[b].copy())
-            all_img = np.hstack([label_lane, predict_lane])
+            label = np.repeat(label_img[b] * 60, 3, axis=2)
+            label_lane = self.cls_label_handle.rescontruct(ground_cls[b][:, :, 0], src_img[b].copy())
+            predict_lane = self.cls_label_handle.rescontruct(predict_cls[b], src_img[b].copy())
+            all_img = np.hstack([label_lane, label, predict_lane])
             cv2.imwrite(save_path+'/'+str(epoch)+'-'+str(b)+'.png', all_img)
         return
 
