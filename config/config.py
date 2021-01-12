@@ -35,6 +35,7 @@ class config(object):
         config['update_mode_freq'] = int(optimize[0].getElementsByTagName('update_mode_freq')[0].firstChild.data)
         config['sim_loss_w'] = float(optimize[0].getElementsByTagName('sim_loss_w')[0].firstChild.data)
         config['shp_loss_w'] = float(optimize[0].getElementsByTagName('shp_loss_w')[0].firstChild.data)
+        config['lanes'] = optimize[0].getElementsByTagName('lanes')[0].firstChild.data
 
         result = collection.getElementsByTagName('result')
         config['image_path'] = result[0].getElementsByTagName('image_path')[0].firstChild.data
