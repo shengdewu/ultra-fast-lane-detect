@@ -33,6 +33,8 @@ class config(object):
         config['epsilon'] = float(optimize[0].getElementsByTagName('epsilon')[0].firstChild.data)
         config['decay_steps'] = float(optimize[0].getElementsByTagName('decay_steps')[0].firstChild.data)
         config['update_mode_freq'] = int(optimize[0].getElementsByTagName('update_mode_freq')[0].firstChild.data)
+        config['sim_loss_w'] = float(optimize[0].getElementsByTagName('sim_loss_w')[0].firstChild.data)
+        config['shp_loss_w'] = float(optimize[0].getElementsByTagName('shp_loss_w')[0].firstChild.data)
 
         result = collection.getElementsByTagName('result')
         config['image_path'] = result[0].getElementsByTagName('image_path')[0].firstChild.data

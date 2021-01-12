@@ -112,11 +112,11 @@ class bottleneck_block():
 
 class resnet():
     def __init__(self):
-        self.layer1 = None
-        self.layer2 = None
-        self.layer3 = None
-        self.layer4 = None
-        self.layer5 = None
+        self.__layer1 = None
+        self.__layer2 = None
+        self.__layer3 = None
+        self.__layer4 = None
+        self.__layer5 = None
         return
 
     def __resnet_head(self, x, scope, trainable=True, reuse=False):
@@ -127,29 +127,51 @@ class resnet():
             o = slim.max_pool2d(o, kernel_size=[3, 3], stride=2, padding='SAME', scope='head-maxpool')
         return o
 
-    def resnet18(self, x, num_class, trainable=True, reuse=False):
+    def resnet18(self, x, trainable=True, reuse=False):
         block = base_block()
-        self.layer1 = self.__resnet_head(x, 'layer1', trainable, reuse)
-        self.layer2 = block.make_layer(self.layer1, 'layer2', 2, False, 64, reuse, trainable)
-        self.layer3 = block.make_layer(self.layer2, 'layer3', 2, True, 128, reuse, trainable)
-        self.layer4 = block.make_layer(self.layer3, 'layer4', 2, True, 256, reuse, trainable)
-        self.layer5 = block.make_layer(self.layer4, 'layer5', 2, True, 512, reuse, trainable)
-        return common_block.fc(self.layer5, 'layer-fc', num_class, reuse)
+        self.__layer1 = self.__resnet_head(x, 'layer1', trainable, reuse)
+        self.__layer2 = block.make_layer(self.__layer1, 'layer2', 2, False, 64, reuse, trainable)
+        self.__layer3 = block.make_layer(self.__layer2, 'layer3', 2, True, 128, reuse, trainable)
+        self.__layer4 = block.make_layer(self.__layer3, 'layer4', 2, True, 256, reuse, trainable)
+        self.__layer5 = block.make_layer(self.__layer4, 'layer5', 2, True, 512, reuse, trainable)
+        return
 
-    def resnet50(self, x, num_class, trainable=True, reuse=False):
+    def resnet50(self, x, trainable=True, reuse=False):
         block = bottleneck_block()
-        self.layer1 = self.__resnet_head(x, 'layer1', trainable, reuse)
-        self.layer2 = block.make_layer(self.layer1, 'layer2', False, 3, 64, 256, reuse, trainable)
-        self.layer3 = block.make_layer(self.layer2, 'layer3', True, 4, 128, 512, reuse, trainable)
-        self.layer4 = block.make_layer(self.layer3, 'layer4', True, 6, 256, 1024, reuse, trainable)
-        self.layer5 = block.make_layer(self.layer4, 'layer5', True, 3, 512, 2048, reuse, trainable)
-        return common_block.fc(self.layer5, 'layer-fc', num_class, reuse)
+        self.__layer1 = self.__resnet_head(x, 'layer1', trainable, reuse)
+        self.__layer2 = block.make_layer(self.__layer1, 'layer2', False, 3, 64, 256, reuse, trainable)
+        self.__layer3 = block.make_layer(self.__layer2, 'layer3', True, 4, 128, 512, reuse, trainable)
+        self.__layer4 = block.make_layer(self.__layer3, 'layer4', True, 6, 256, 1024, reuse, trainable)
+        self.__layer5 = block.make_layer(self.__layer4, 'layer5', True, 3, 512, 2048, reuse, trainable)
+        return
+
+    def avgerage_pool_1000d_fc_softmax(self, num_class, reuse=False):
+        '''
+        最后一层，看需求，需不要用使用
+        :param num_class:
+        :param reuse:
+        :return:
+        '''
+        return common_block.fc(self.__layer5, 'layer-fc', num_class, reuse)
+
+    @property
+    def layer5(self):
+        return self.__layer5
+
+    @property
+    def layer4(self):
+        return self.__layer4
+
+    @property
+    def layer3(self):
+        return self.__layer3
 
 if __name__ == '__main__':
     resnet_model = resnet()
     x = tf.get_variable(name='x',shape=(10, 224, 224, 3))
-    #model18 = resnet_model.resnet18(x, 1000)
-    model50 = resnet_model.resnet50(x, 1000)
+    #resnet_model.resnet18(x)
+    resnet_model.resnet50(x)
+    model = resnet_model.avgerage_pool_1000d_fc_softmax(1000)
     print('resnet50')
 
 

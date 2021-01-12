@@ -23,14 +23,12 @@ def structural_loss(label):
     return tf.reduce_mean(loss)
 
 def cls_loss(group_cls, label, num_cls):
-    bs, ws, hs, cs = label.get_shape().as_list()
     scores = tf.nn.softmax(group_cls, axis=3)
     factor = tf.pow(1. - scores, 2)
     log_score = tf.nn.log_softmax(group_cls, axis=3)
     log_score = factor * log_score
 
-    label = tf.reshape(label, (bs, ws, hs))
-    label_oh = tf.one_hot(label, num_cls)
+    label_oh = tf.one_hot(label[:, :, :, 0], num_cls)
     nllloss1 = tf.multiply(label_oh, log_score)
     nllloss2 = tf.abs(nllloss1)
     index = tf.where(nllloss2 > 0)

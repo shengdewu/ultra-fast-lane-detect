@@ -24,7 +24,7 @@ class ultra_lane():
 
     def make_net(self, x, trainable=True, reuse=False):
         resnet_model = resnet()
-        resnet_model.resnet50(x, self._cells+1, trainable, reuse)
+        resnet_model.resnet18(x, trainable, reuse)
         x3 = resnet_model.layer3
         x4 = resnet_model.layer4
         x5 = resnet_model.layer5
@@ -54,7 +54,7 @@ class ultra_lane():
         src_img_train_queue, label_queue, ground_cls_queue, src_img_queue = pipe_handle.make_pipe(batch_size, (src_tensor, label_tensor, cls_tensor), train_data_handle.pre_process_img)
         group_cls = self.make_net(src_img_train_queue, trainable, reuse)
         cls_loss_tensor, sim_loss_tensor, shp_loss_tensor, predict_rows = self.loss(group_cls, ground_cls_queue)
-        total_loss_tensor = cls_loss_tensor + sim_loss_tensor + shp_loss_tensor
+        total_loss_tensor = cls_loss_tensor + sim_loss_tensor * config['sim_loss_w'] + shp_loss_tensor * config['shp_loss_w']
         tensor = dict()
         tensor['total_loss'] = total_loss_tensor
         tensor['cls_loss'] = cls_loss_tensor
