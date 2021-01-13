@@ -25,7 +25,7 @@ class data_stream:
                 if not line:
                     break
                 names = line.strip('\n').split(' ')
-                if self._lanes != '' and self._lanes != names[3]:
+                if self._lanes is not None and self._lanes != names[3]:
                     continue
 
                 img_path = self._root + '/' + names[0]

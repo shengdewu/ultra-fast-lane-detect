@@ -3,7 +3,7 @@ import tensorflow.contrib.slim as slim
 
 class common_block():
     @staticmethod
-    def add(identify, x, scope, reuse=True):
+    def add(identify, x, scope, reuse=True, trainable=True):
         with tf.variable_scope(scope, reuse=reuse):
             _, xw, xh, xc = list(x.get_shape())
             _, iw, ih, ic = list(identify.get_shape())
@@ -11,8 +11,8 @@ class common_block():
             identify_map = identify
             if xc != ic:
                 if xw != iw:
-                    identify_map = slim.conv2d(identify, ic, [3, 3], 2, padding='SAME', reuse=reuse, scope=scope+'add-dimensions-adjust')
-                identify_map = slim.conv2d(identify_map, xc, [1, 1], stride=1, padding='SAME', reuse=reuse, scope=scope+'add-dimensions')
+                    identify_map = slim.conv2d(identify, ic, [3, 3], 2, padding='SAME', reuse=reuse, biases_initializer=None, trainable=trainable, scope=scope+'add-dimensions-adjust')
+                identify_map = slim.conv2d(identify_map, xc, [1, 1], stride=1, padding='SAME', reuse=reuse, biases_initializer=None, trainable=trainable, scope=scope+'add-dimensions')
 
             o = tf.add(identify_map, x)
         return o
@@ -27,7 +27,7 @@ class common_block():
     def conv(x, stride, ochannel, scope, reuse=True, ksize=3, trainable=True):
         with tf.variable_scope(scope, reuse=reuse):
             _, iw, ih, ic = list(x.get_shape())
-            o = slim.conv2d(x, ochannel, [ksize, ksize], stride, padding='SAME', scope='conv2d')
+            o = slim.conv2d(x, ochannel, [ksize, ksize], stride, trainable=trainable, biases_initializer=None, padding='SAME', scope='conv2d')
             o = slim.batch_norm(o, is_training=trainable, fused=True, scope='bn')
         return o
 
@@ -35,16 +35,16 @@ class common_block():
     @slim.add_arg_scope
     def conv1x1(x, ochannel, scope, reuse=True, trainable=True):
         with tf.variable_scope(scope, reuse=reuse):
-            o = slim.conv2d(x, ochannel, [1, 1], 1, padding='SAME', scope='conv2d')
+            o = slim.conv2d(x, ochannel, [1, 1], 1, padding='SAME', biases_initializer=None, trainable=trainable, scope='conv2d')
             o = slim.batch_norm(o, is_training=trainable, fused=True, scope='convbn')
         return o
 
     @staticmethod
-    def fc(x, scope, num_class, reuse=True):
+    def fc(x, scope, num_class, reuse=True, trainable=True):
         with tf.variable_scope(scope, reuse=reuse):
             o = tf.nn.avg_pool2d(x, 7, strides=1, padding='VALID', name='avgpool')
 
-            o = slim.conv2d(o, num_class, [1, 1], 1, padding='SAME', reuse=reuse, scope='1000d-fc')
+            o = slim.conv2d(o, num_class, [1, 1], 1, padding='SAME', biases_initializer=None, reuse=reuse, trainable=trainable, scope='1000d-fc')
 
             o = tf.nn.softmax(o, name='softmax')
         return o
@@ -57,9 +57,10 @@ class base_block():
 
     def block(self, x, scope, stride, ochannel, reuse=True, trainable=True):
         with tf.variable_scope(scope, reuse=reuse):
-            o = common_block.conv(x, stride, ochannel=ochannel, ksize=3, scope='cov1', reuse=reuse,trainable=trainable)
+            o = common_block.conv(x, stride, ochannel=ochannel, ksize=3, scope='cov1', reuse=reuse, trainable=trainable)
             o = common_block.relu(o, 'relu')
             o = common_block.conv(o, 1, ochannel=ochannel, ksize=3, scope='cov2', reuse=reuse, trainable=trainable)
+            o = common_block.add(x, o, 'shortcut', reuse, trainable)
         return o
 
     def make_layer(self, x, scope, block_num, downsample, ochannel, reuse=True, trainable=True):
@@ -72,11 +73,8 @@ class base_block():
         o = common_block.relu(o, scope + '-block1-conv2-relu')
         for i in range(1, block_num):
             o = self.block(o, scope + '-block2', 1, ochannel, reuse, trainable)
-            if i < block_num-1:
-                o = common_block.relu(o, scope + '-block' + str(i + 1) + '-relu')
+            o = common_block.relu(o, scope + '-block' + str(i + 1) + '-relu')
 
-        o = common_block.add(x, o, scope+'-add', reuse)
-        o = common_block.relu(o, scope + '-add-relu')
         return o
 
 class bottleneck_block():
@@ -92,6 +90,7 @@ class bottleneck_block():
             o = common_block.conv(o, stride, ochannel=dim_reduce_channel, ksize=3, scope='cov1', reuse=reuse, trainable=trainable)
             o = common_block.relu(o, 'relu')
             o = common_block.conv1x1(o, ochannel=dim_ascend_channel, scope='cov1x1-ascend', reuse=reuse, trainable=trainable)
+            o = common_block.add(x, o, 'shortcut', reuse, trainable)
         return o
 
     def make_layer(self, x, scope, downsample, block_num, dim_reduce_channel, dim_ascend_channel, reuse=True, trainable=True):
@@ -103,10 +102,8 @@ class bottleneck_block():
         o = common_block.relu(o, scope+'-block1-relu')
         for i in range(1, block_num):
             o = self.block(o, scope + '-block'+str(i+1), 1, dim_reduce_channel, dim_ascend_channel, reuse, trainable)
-            if i < block_num-1:
-                o = common_block.relu(o, scope + '-block' + str(i + 1) + '-relu')
+            o = common_block.relu(o, scope + '-block' + str(i + 1) + '-relu')
 
-        o = common_block.add(x, o, scope+'-add', reuse)
         return o
 
 
@@ -121,7 +118,7 @@ class resnet():
 
     def __resnet_head(self, x, scope, trainable=True, reuse=False):
         with tf.variable_scope(scope, reuse=reuse):
-            o = slim.conv2d(x, 64, [7, 7], 2, padding='SAME', reuse=reuse, scope='head-conv2d')
+            o = slim.conv2d(x, 64, [7, 7], 2, padding='SAME', reuse=reuse, trainable=trainable, biases_initializer=None, scope='head-conv2d')
             o = slim.batch_norm(o, is_training=trainable, fused=True, scope='head-bn')
             o = tf.nn.relu(o, name='head-relu')
             o = slim.max_pool2d(o, kernel_size=[3, 3], stride=2, padding='SAME', scope='head-maxpool')
@@ -145,14 +142,15 @@ class resnet():
         self.__layer5 = block.make_layer(self.__layer4, 'layer5', True, 3, 512, 2048, reuse, trainable)
         return
 
-    def avgerage_pool_1000d_fc_softmax(self, num_class, reuse=False):
+    def avgerage_pool_1000d_fc_softmax(self, num_class, reuse=False, trainable=True):
         '''
         最后一层，看需求，需不要用使用
+        :param trainable:
         :param num_class:
         :param reuse:
         :return:
         '''
-        return common_block.fc(self.__layer5, 'layer-fc', num_class, reuse)
+        return common_block.fc(self.__layer5, 'layer-fc', num_class, reuse, trainable)
 
     @property
     def layer5(self):
@@ -168,9 +166,9 @@ class resnet():
 
 if __name__ == '__main__':
     resnet_model = resnet()
-    x = tf.get_variable(name='x',shape=(10, 224, 224, 3))
-    #resnet_model.resnet18(x)
-    resnet_model.resnet50(x)
+    x = tf.get_variable(name='x', shape=(10, 224, 224, 3))
+    resnet_model.resnet18(x)
+    #resnet_model.resnet50(x)
     model = resnet_model.avgerage_pool_1000d_fc_softmax(1000)
     print('resnet50')
 

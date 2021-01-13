@@ -5,44 +5,50 @@ class config(object):
         return
 
     @staticmethod
+    def get_value(handle, key):
+        value = None
+        tag_name = handle[0].getElementsByTagName(key)[0].firstChild
+        if tag_name is not None:
+            value = tag_name.data
+            if value == 'None':
+                value = None
+        return value
+
+    @staticmethod
     def get_config(xml_path):
         dom_tree = minidom.parse(xml_path)
         collection = dom_tree.documentElement
         if collection.nodeName != 'config':
             raise RuntimeError('this is invalid nn config: the must has header "config"')
 
-        config = dict()
+        cf = dict()
 
         train = collection.getElementsByTagName('train')
-        config['batch_size'] = int(train[0].getElementsByTagName('batch_size')[0].firstChild.data)
-        config['eval_batch_size'] = int(train[0].getElementsByTagName('eval_batch_size')[0].firstChild.data)
-        config['train_epoch'] = int(train[0].getElementsByTagName('train_epoch')[0].firstChild.data)
-        config['device'] = str(train[0].getElementsByTagName('device')[0].firstChild.data)
-        if config['device'] == 'None':
-            config['device'] = None
-        config['cpu_cores'] = str(train[0].getElementsByTagName('cpu_cores')[0].firstChild.data)
-        if config['cpu_cores'] == 'None':
-            config['cpu_cores'] = None
-        else:
-            config['cpu_cores'] = int(config['cpu_cores'])
+        cf['batch_size'] = int(config.get_value(train, 'batch_size'))
+        cf['eval_batch_size'] = int(config.get_value(train, 'eval_batch_size'))
+        cf['train_epoch'] = int(config.get_value(train, 'train_epoch'))
+        cf['device'] = config.get_value(train, 'device')
+        cf['cpu_cores'] = config.get_value(train, 'cpu_cores')
+        if cf['cpu_cores'] is not None:
+            cf['cpu_cores'] = int(cf['cpu_cores'])
 
         optimize = collection.getElementsByTagName('optimize')
-        config['learning_rate'] = float(optimize[0].getElementsByTagName('learning_rate')[0].firstChild.data)
-        config['end_learning_rate'] = float(optimize[0].getElementsByTagName('end_learning_rate')[0].firstChild.data)
-        config['decay_rate'] = float(optimize[0].getElementsByTagName('decay_rate')[0].firstChild.data)
-        config['epsilon'] = float(optimize[0].getElementsByTagName('epsilon')[0].firstChild.data)
-        config['decay_steps'] = float(optimize[0].getElementsByTagName('decay_steps')[0].firstChild.data)
-        config['update_mode_freq'] = int(optimize[0].getElementsByTagName('update_mode_freq')[0].firstChild.data)
-        config['sim_loss_w'] = float(optimize[0].getElementsByTagName('sim_loss_w')[0].firstChild.data)
-        config['shp_loss_w'] = float(optimize[0].getElementsByTagName('shp_loss_w')[0].firstChild.data)
-        config['lanes'] = optimize[0].getElementsByTagName('lanes')[0].firstChild.data
+        cf['learning_rate'] = float(config.get_value(optimize, 'learning_rate'))
+        cf['end_learning_rate'] = float(config.get_value(optimize, 'end_learning_rate'))
+        cf['decay_rate'] = float(config.get_value(optimize, 'decay_rate'))
+        cf['epsilon'] = float(config.get_value(optimize, 'epsilon'))
+        cf['decay_steps'] = float(config.get_value(optimize, 'decay_steps'))
+        cf['update_mode_freq'] = int(config.get_value(optimize, 'update_mode_freq'))
+        cf['sim_loss_w'] = float(config.get_value(optimize, 'sim_loss_w'))
+        cf['shp_loss_w'] = float(config.get_value(optimize, 'shp_loss_w'))
+        cf['lanes'] = config.get_value(optimize, 'lanes')
 
         result = collection.getElementsByTagName('result')
-        config['image_path'] = result[0].getElementsByTagName('image_path')[0].firstChild.data
-        config['out_path'] = result[0].getElementsByTagName('out_path')[0].firstChild.data
-        config['img_width'] = int(result[0].getElementsByTagName('img_width')[0].firstChild.data)
-        config['img_height'] = int(result[0].getElementsByTagName('img_height')[0].firstChild.data)
+        cf['image_path'] = config.get_value(result, 'image_path')
+        cf['out_path'] = config.get_value(result, 'out_path')
+        cf['img_width'] = int(config.get_value(result, 'img_width'))
+        cf['img_height'] = int(config.get_value(result, 'img_height'))
 
-        return config
+        return cf
 
 
