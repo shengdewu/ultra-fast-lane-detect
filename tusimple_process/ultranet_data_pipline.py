@@ -98,12 +98,13 @@ class ultranet_data_pipline:
             cv2.destroyAllWindows()
         return label_image, bin_label
 
-    def generate_data(self, data_path, out_path, show=False, shape=(720, 1280), rate=0.7):
+    def generate_data(self, data_path, out_path, show=False, shape=(720, 1280), rate=1):
         '''
+        :param show: 是否显示
+        :param rate: 训练集占有比例
         :param data_path: tuSimple 数据集路径
         :param out_path: 产生结果输出路径
         :param shape: 图像实际的 h,w
-        :param min_len: 车道的最小长度
         :return:
         '''
 
@@ -113,7 +114,7 @@ class ultranet_data_pipline:
         if not os.path.exists(data_path):
             raise FileExistsError('{} not find data path'.format(data_path))
 
-        img_path = 'img'
+        img_path = 'train'
         self._create_path(out_path + '/' + img_path)
 
         json_files = [f for f in os.listdir(data_path) if f.endswith('.json')]
@@ -135,9 +136,6 @@ class ultranet_data_pipline:
                     h_sample = np.array(lane_dict['h_samples'])
                     raw_file = lane_dict['raw_file']
                     image_path = '{}/{}'.format(data_path, raw_file)
-                    file_seg = raw_file.split('/')
-                    label_name = file_seg[-3] + '-' + file_seg[-2]+'-' + file_seg[-1][0:file_seg[-1].rfind('.')]+'-label.png'
-                    image_name = file_seg[-3] + '-' + file_seg[-2]+'-' + file_seg[-1]
 
                     if not os.path.exists(image_path):
                         print('{} not exists'.format(image_path))
@@ -164,12 +162,17 @@ class ultranet_data_pipline:
                         print('{}\n{}'.format(err, line))
                         continue
 
+                    name_pre = raw_file[:raw_file.find('.jpg')].replace('/', '-')
+                    img_name = raw_file.replace('/', '-')
+                    label_name = name_pre + '-label.png'
+                    cls_name = name_pre + '-cls.png'
+
+                    cv2.imwrite(out_path + '/' + img_path + '/' + label_name, label_image)
+                    copyfile(image_path, out_path + '/' + img_path + '/' + img_name)
+
+                    file_out = ''
                     if self.cls_label_handle is None:
-                        label_out_path = out_path + '/' + img_path + '/' + label_name
-                        cv2.imwrite(label_out_path, label_image)
-                        image_out_path = out_path + '/' + img_path + '/' + image_name
-                        copyfile(image_path, image_out_path)
-                        total_files.append(img_path + '/' + image_name + ' ' + img_path + '/' + label_name + ' ' + ''.join(list(map(str, bin_label))) + '\n')
+                        file_out = '{} {} {}\n'.format(img_path + '/' + img_name, img_path + '/' + label_name, ''.join(list(map(str, bin_label))))
                     else:
                         src_img = cv2.imread(image_path)
                         h, w, c = src_img.shape
@@ -183,13 +186,11 @@ class ultranet_data_pipline:
                         if idx[0].shape[0] > 0 or idx[1].shape[0] > 0:
                             print('{} beyond 255'.format(line, ))
 
-                        cls_name = label_name[0:label_name.rfind('.')] + '-cls.png'
-                        cv2.imwrite(out_path + '/' + img_path + '/' + label_name, label_image)
                         cv2.imwrite(out_path + '/' + img_path + '/' + cls_name, cls_label)
-                        copyfile(image_path, out_path + '/' + img_path + '/' + image_name)
-                        total_files.append(img_path + '/' + image_name + ' ' + img_path + '/' + label_name + ' ' + img_path + '/' + cls_name + ' ' + ''.join(list(map(str, bin_label))) + '\n')
+                        file_out = '{} {} {} {}\n'.format(img_path + '/' + img_name, img_path + '/' + label_name, img_path + '/' + cls_name, ''.join(list(map(str, bin_label))))
 
-        random.shuffle(total_files)
+                    total_files.append(file_out)
+
         train_len = math.ceil(len(total_files) * rate)
         with open(out_path+'/train_files.txt', 'w') as train_handle:
             for index in range(train_len):

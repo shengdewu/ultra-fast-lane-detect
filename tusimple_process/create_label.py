@@ -96,16 +96,14 @@ class tusimple_label:
         if h != 720:
             row_anchors = [int(i*h/720) for i in self._row_anchors]
 
-        col_sample = np.linspace(0, w - 1, self._cells)
-
         _, lanes = cls_label.shape
         for i in range(lanes):
             pti = cls_label[:, i]
-            to_pts = [int(pt * (col_sample[1] - col_sample[0])) if pt != self._cells else -1 for pt in pti]
+            to_pts = [int(pt * w / self._cells) if pt != self._cells else -2 for pt in pti]
             points = [(w, h) for h, w in zip(row_anchors, to_pts)]
             c = color[i]
             for l in points:
-                if l[0] == -1:
+                if l[0] == -2:
                     continue
                 cv2.circle(img, l, radius=3, color=c, thickness=3)
         if show:
