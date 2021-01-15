@@ -17,7 +17,7 @@ def structural_loss(label):
     k = tf.convert_to_tensor([i for i in range(1, cells)], dtype=tf.float32)
     loc = tf.reduce_sum(prob * k, -1)
     loss_all = list()
-    for i in range(rows//2):
+    for i in range(0, rows//2):
         loss_all.append(tf.abs((loc[:,i,:]-loc[:,i+1,:])-(loc[:,i+1,:]-loc[:,i+2,:])))
     loss = tf.concat(loss_all, 0)
     return tf.reduce_mean(loss)

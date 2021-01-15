@@ -42,7 +42,7 @@ class data_stream:
         label_img_tensor = tf.convert_to_tensor(label_img_files)
         src_img_tensor = tf.convert_to_tensor(src_img_files)
         cls_img_tensor = tf.convert_to_tensor(cls_img_files)
-        return src_img_tensor, label_img_tensor, cls_img_tensor
+        return src_img_tensor, label_img_tensor, cls_img_tensor, len(src_img_files)
 
     def pre_process_img(self, src_img_tensor, label_img_tensor, cls_img_tensor):
         src_img = tf.image.decode_jpeg(tf.read_file(src_img_tensor), channels=3)
