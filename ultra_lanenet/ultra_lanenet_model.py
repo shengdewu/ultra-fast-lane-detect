@@ -10,6 +10,8 @@ import logging
 import numpy as np
 from tusimple_process.create_label import tusimple_label
 import os
+import util.CosineAnnealing
+
 
 class ultra_lane():
     def __init__(self):
@@ -86,7 +88,8 @@ class ultra_lane():
             precision_summary = tf.summary.scalar(name='precision', tensor=precision)
 
             global_step = tf.train.create_global_step()
-            learning_rate = tf.train.exponential_decay(config['learning_rate'], global_step, config['decay_steps'], config['decay_rate'])
+            #learning_rate = tf.train.exponential_decay(config['learning_rate'], global_step, config['decay_steps'], config['decay_rate'])
+            learning_rate = util.CosineAnnealing.cosine_decay(global_step, int(pipe['total_img'] / config['batch_size']), config['learning_rate'], config['end_learning_rate'])
             optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
             train_op = slim.learning.create_train_op(pipe['total_loss'], optimizer)
             ls_summary = tf.summary.scalar(name='learning-rate', tensor=learning_rate)
@@ -105,7 +108,7 @@ class ultra_lane():
                 summary_writer.add_graph(sess.graph)
 
                 min_loss = float('inf')
-                for step in range(config['train_epoch']):
+                for step in range(config['train_epoch'] * pipe['total_img']):
 
                     _, total_loss, p, gs, lr, train_summary = sess.run([train_op, pipe['total_loss'], precision, global_step, learning_rate, train_summary_op])
 
@@ -115,7 +118,7 @@ class ultra_lane():
 
                     if (step + 1) % config['update_mode_freq'] == 0:
                         valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict = sess.run([valid_pipe['total_loss'], valid_pipe['src_img'], valid_pipe['label_img'], valid_pipe['ground_cls'], valid_pipe['predict']])
-                        self.match_coordinate(valid_src_img.astype(np.uint8), val_label_img, valid_ground_cls, valid_predict, save_path, step)
+                        self.match_coordinate(valid_src_img.astype(np.uint8), val_label_img, valid_ground_cls, valid_predict, save_path, int(step % config['eval_batch_size']))
                         # logging.info('valid model: gs={},  loss={}, lr={}'.format(gs, valid_total_loss, lr))
                         print('valid model: gs={},  loss={}, lr={}'.format(gs, valid_total_loss, lr))
                         #print('train model: gs={},  loss={}, precision={}, lr={}'.format(gs, total_loss, p, lr))

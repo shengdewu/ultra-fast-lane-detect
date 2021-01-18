@@ -61,6 +61,7 @@ class base_block():
             o = common_block.relu(o, 'relu')
             o = common_block.conv(o, 1, ochannel=ochannel, ksize=3, scope='cov2', reuse=reuse, trainable=trainable)
             o = common_block.add(x, o, 'shortcut', reuse, trainable)
+            o = common_block.relu(o, 'relu')
         return o
 
     def make_layer(self, x, scope, block_num, downsample, ochannel, reuse=True, trainable=True):
@@ -70,10 +71,9 @@ class base_block():
             stride = 2
 
         o = self.block(x, scope+'-block1', stride, ochannel, reuse, trainable)
-        o = common_block.relu(o, scope + '-block1-conv2-relu')
+
         for i in range(1, block_num):
             o = self.block(o, scope + '-block2', 1, ochannel, reuse, trainable)
-            o = common_block.relu(o, scope + '-block' + str(i + 1) + '-relu')
 
         return o
 
@@ -91,6 +91,7 @@ class bottleneck_block():
             o = common_block.relu(o, 'relu')
             o = common_block.conv1x1(o, ochannel=dim_ascend_channel, scope='cov1x1-ascend', reuse=reuse, trainable=trainable)
             o = common_block.add(x, o, 'shortcut', reuse, trainable)
+            o = common_block.relu(o, scope + 'relu')
         return o
 
     def make_layer(self, x, scope, downsample, block_num, dim_reduce_channel, dim_ascend_channel, reuse=True, trainable=True):
@@ -99,10 +100,8 @@ class bottleneck_block():
             stride = 2
 
         o = self.block(x, scope+'-block1', stride, dim_reduce_channel, dim_ascend_channel, reuse, trainable)
-        o = common_block.relu(o, scope+'-block1-relu')
         for i in range(1, block_num):
             o = self.block(o, scope + '-block'+str(i+1), 1, dim_reduce_channel, dim_ascend_channel, reuse, trainable)
-            o = common_block.relu(o, scope + '-block' + str(i + 1) + '-relu')
 
         return o
 
