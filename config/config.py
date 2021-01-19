@@ -42,6 +42,7 @@ class config(object):
         cf['sim_loss_w'] = float(config.get_value(optimize, 'sim_loss_w'))
         cf['shp_loss_w'] = float(config.get_value(optimize, 'shp_loss_w'))
         cf['lanes'] = config.get_value(optimize, 'lanes')
+        cf['warmup_iter'] = int(config.get_value(optimize, 'warmup_iter'))
 
         result = collection.getElementsByTagName('result')
         cf['image_path'] = config.get_value(result, 'image_path')
