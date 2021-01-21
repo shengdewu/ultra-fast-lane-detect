@@ -28,7 +28,7 @@ class CosineAnnealing(tf.keras.optimizers.schedules.LearningRateSchedule):
             global_step = math_ops.cast(step, dtype)
 
             def multi_policy():
-                return math_ops.mul(eta_max-eta_min, math_ops.div(1 + math_ops.cos(math_ops.div(math_ops.mul(pi, global_step), max_iter)), 2))
+                return eta_min + math_ops.div(math_ops.mul(eta_max-eta_min, 1 + math_ops.cos(math_ops.div(math_ops.mul(pi, global_step), max_iter))), 2)
 
             def linear():
                 return math_ops.mul(eta_max, math_ops.div(global_step, warmup_iter))

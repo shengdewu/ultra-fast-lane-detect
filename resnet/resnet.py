@@ -10,9 +10,8 @@ class common_block():
 
             identify_map = identify
             if xc != ic:
-                if xw != iw:
-                    identify_map = slim.conv2d(identify, ic, [3, 3], 2, padding='SAME', reuse=reuse, biases_initializer=None, trainable=trainable, scope=scope+'add-dimensions-adjust')
-                identify_map = slim.conv2d(identify_map, xc, [1, 1], stride=1, padding='SAME', reuse=reuse, biases_initializer=None, trainable=trainable, scope=scope+'add-dimensions')
+                identify_map = slim.conv2d(identify_map, xc, [1, 1], stride=2, padding='SAME', reuse=reuse, biases_initializer=None, trainable=trainable, scope=scope+'add-dimensions')
+                slim.batch_norm(identify_map, is_training=trainable, fused=True, scope='bn')
 
             o = tf.add(identify_map, x)
         return o

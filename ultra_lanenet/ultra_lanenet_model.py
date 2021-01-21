@@ -11,6 +11,7 @@ import numpy as np
 from tusimple_process.create_label import tusimple_label
 import os
 import util.CosineAnnealing
+import math
 
 
 class ultra_lane():
@@ -65,8 +66,8 @@ class ultra_lane():
         tensor['ground_cls'] = ground_cls_queue
         tensor['predict'] = predict_rows
         tensor['label_img'] = label_queue
-        tensor['img_epoch'] = int(total_img / batch_size)
-        tensor['total_epoch'] = int(config['train_epoch'] * total_img / batch_size)
+        tensor['img_epoch'] = math.ceil(total_img / batch_size)
+        tensor['total_epoch'] = config['train_epoch'] * tensor['img_epoch']
         return tensor
 
     def train(self, config):
@@ -114,14 +115,12 @@ class ultra_lane():
 
                     #summary_writer.add_summary(train_summary, global_step=gs)
 
-                    print('train model: gs={},  loss={}, precision={}, lr={}'.format(gs, total_loss, p, lr))
+                    logging.info('train model: gs={},  loss={}, precision={}, lr={}'.format(gs, total_loss, p, lr))
 
                     if (step + 1) % config['update_mode_freq'] == 0:
                         valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict = sess.run([valid_pipe['total_loss'], valid_pipe['src_img'], valid_pipe['label_img'], valid_pipe['ground_cls'], valid_pipe['predict']])
                         self.match_coordinate(valid_src_img.astype(np.uint8), val_label_img, valid_ground_cls, valid_predict, save_path, int(step % pipe['img_epoch']))
-                        # logging.info('valid model: gs={},  loss={}, lr={}'.format(gs, valid_total_loss, lr))
                         print('valid model: gs={},  loss={}, lr={}'.format(gs, valid_total_loss, lr))
-                        #print('train model: gs={},  loss={}, precision={}, lr={}'.format(gs, total_loss, p, lr))
 
                         # saver.save(sess, model_path, global_step=gs)
                         # print('update model loss from {} :{} to {}'.format(step, min_loss, total_loss))
