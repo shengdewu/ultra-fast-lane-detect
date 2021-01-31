@@ -130,10 +130,28 @@ class ultra_lane():
         batch, h, w, c = src_img.shape
 
         for b in range(batch):
-            label = np.repeat(label_img[b] * 60, 3, axis=2)
-            label_lane = self.cls_label_handle.rescontruct(ground_cls[b][:, :, 0], src_img[b].copy())
-            predict_lane = self.cls_label_handle.rescontruct(predict_cls[b], src_img[b].copy())
-            all_img = np.hstack([label_lane, label, predict_lane])
+            #label = np.repeat(label_img[b] * 60, 3, axis=2)
+            label_lane = self.rescontruct(ground_cls[b][:, :, 0])
+            predict_lane = self.rescontruct(predict_cls[b])
+            all_img = np.hstack([label_lane, predict_lane])
             cv2.imwrite(save_path+'/'+str(epoch)+'-'+str(b)+'.png', all_img)
         return
+
+    def rescontruct(self, cls_label, show=False):
+        color = [(255, 0, 0), (0,255,0), (0, 0, 255), (255, 255, 0)]
+        lane_img = np.zeros((720, 1280, 3), dtype=np.uint8)
+
+        for i in range(cls_label.shape[1]):
+            pti = cls_label[:, i]
+            to_pts = [int(pt * tusimple_process.ultranet_comm.ORIGINAL_W / tusimple_process.ultranet_comm.CELLS) if pt != self._cells else -2 for pt in pti]
+            points = [(w, h) for h, w in zip(tusimple_process.ultranet_comm.ROW_ANCHORS, to_pts)]
+            for l in points:
+                if l[0] == -2:
+                    continue
+                cv2.circle(lane_img, l, radius=3, color=color[i], thickness=3)
+        if show:
+            cv2.imshow('img', lane_img)
+            cv2.waitKey()
+            cv2.destroyAllWindows()
+        return lane_img
 
