@@ -94,18 +94,16 @@ class tusimple_label:
         h, w, c = img.shape
         row_anchors = self._row_anchors
         if h != 720:
-            row_anchors = [int(i*h/720) for i in self._row_anchors]
+            row_anchors = [int(i*float(h)/720) for i in self._row_anchors]
 
-        _, lanes = cls_label.shape
-        for i in range(lanes):
+        for i in range(cls_label.shape[1]):
             pti = cls_label[:, i]
             to_pts = [int(pt * w / self._cells) if pt != self._cells else -2 for pt in pti]
             points = [(w, h) for h, w in zip(row_anchors, to_pts)]
-            c = color[i]
             for l in points:
                 if l[0] == -2:
                     continue
-                cv2.circle(img, l, radius=3, color=c, thickness=3)
+                cv2.circle(img, l, radius=3, color=color[i], thickness=3)
         if show:
             cv2.imshow('img', img)
             cv2.waitKey()
