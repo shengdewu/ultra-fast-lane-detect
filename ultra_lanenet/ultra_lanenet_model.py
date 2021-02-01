@@ -26,12 +26,12 @@ class ultra_lane():
     def make_net(self, x, trainable=True, reuse=False):
         resnet_model = resnet()
         resnet_model.resnet18(x, trainable, reuse)
+        x2 = resnet_model.layer2
         x3 = resnet_model.layer3
         x4 = resnet_model.layer4
-        x5 = resnet_model.layer5
 
         total_dims = (self._cells + 1) * len(self._row_anchors) * self._lanes
-        fc = slim.conv2d(x5, 8, [1, 1], 1, padding='SAME', reuse=reuse, scope='fc-1')
+        fc = slim.conv2d(x4, 8, [1, 1], 1, padding='SAME', reuse=reuse, scope='fc-1')
         fc = tf.reshape(fc, shape=(-1, 1800))
         fc = tf.contrib.layers.fully_connected(fc, 2048, scope='line1', reuse=reuse, activation_fn=None, weights_initializer=tf.initializers.random_normal(0, 1.0), biases_initializer=tf.initializers.random_normal(0, 1.0))
         fc = tf.nn.relu(fc)
@@ -95,6 +95,10 @@ class ultra_lane():
             train_op = slim.learning.create_train_op(pipe['total_loss'], optimizer)
             ls_summary = tf.summary.scalar(name='learning-rate', tensor=learning_rate)
 
+            with open(os.path.join(model_path, 'tf_param.txt'), 'w') as w:
+                for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
+                    w.write('{}\n'.format(v))
+
             #valid
             valid_pipe = self.create_train_pipe(pipe_handle, config, config['eval_batch_size'], False, True, 'valid_files.txt')
             val_total_loss_summary = tf.summary.scalar(name='val-total-loss', tensor=valid_pipe['total_loss'])
@@ -112,16 +116,16 @@ class ultra_lane():
                 for step in range(pipe['total_epoch']):
                     if step % pipe['img_epoch'] == 0:
                         epoch += 1
-                    _, total_loss, p, gs, lr, train_summary = sess.run([train_op, pipe['total_loss'], precision, global_step, learning_rate, train_summary_op])
+                    _, total_loss, p, gs, lr, valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict = sess.run([train_op, pipe['total_loss'], precision, global_step, learning_rate, pipe['total_loss'], pipe['src_img'], pipe['label_img'], pipe['ground_cls'], pipe['predict']])
 
                     #summary_writer.add_summary(train_summary, global_step=gs)
 
-                    valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict = sess.run([valid_pipe['total_loss'], valid_pipe['src_img'], valid_pipe['label_img'], valid_pipe['ground_cls'], valid_pipe['predict']])
+                    #valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict = sess.run([valid_pipe['total_loss'], valid_pipe['src_img'], valid_pipe['label_img'], valid_pipe['ground_cls'], valid_pipe['predict']])
                     self.match_coordinate(valid_src_img.astype(np.uint8), val_label_img, valid_ground_cls, valid_predict, save_path, epoch)
-                    logging.info('train model: gs={},  loss={}, precision={}, lr={}, valid_loss={}'.format(gs, total_loss, p, lr, valid_total_loss))
+                    print('train model: gs={},  loss={}, precision={}, lr={}, valid_loss={}'.format(gs, total_loss, p, lr, valid_total_loss))
 
                     if step > config['update_mode_freq'] and step % config['update_mode_freq'] == 0:
-                        saver.save(sess, model_path, global_step=gs)
+                        #saver.save(sess, model_path, global_step=gs)
                         print('update model loss from {} :{}'.format(step, total_loss))
 
         return
