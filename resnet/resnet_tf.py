@@ -93,7 +93,7 @@ class resnet_tf():
                         num_blocks=3,  # 6n+2 total weight layers will be used.
                         use_bias=False,  # defaults to using batch norm
                         num_classes=10):
-        c = Config()
+        c = dict()
         c['is_training'] = tf.convert_to_tensor(is_training,
                                                 dtype='bool',
                                                 name='is_training')
