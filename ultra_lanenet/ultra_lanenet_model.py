@@ -33,20 +33,23 @@ class ultra_lane():
         total_dims = (self._cells + 1) * len(self._row_anchors) * self._lanes
         fc = slim.conv2d(x4, 8, [1, 1], 1, padding='SAME', reuse=reuse, scope='fc-1')
         fc = tf.reshape(fc, shape=(-1, 1800))
-        fc = tf.contrib.layers.fully_connected(fc, 2048, scope='line1', reuse=reuse, activation_fn=None, weights_initializer=tf.initializers.random_normal(0, 1.0), biases_initializer=tf.initializers.random_normal(0, 1.0))
+        fc = tf.contrib.layers.fully_connected(fc, 2048, scope='line1', reuse=reuse, activation_fn=None, trainable=trainable)
         fc = tf.nn.relu(fc)
-        fc = tf.contrib.layers.fully_connected(fc, total_dims, scope='line2', reuse=reuse, activation_fn=None, weights_initializer=tf.initializers.random_normal(0, 1.0), biases_initializer=tf.initializers.random_normal(0, 1.0))
+        fc = tf.contrib.layers.fully_connected(fc, total_dims, scope='line2', reuse=reuse, activation_fn=None, trainable=trainable)
 
         group_cls = tf.reshape(fc, shape=(-1, len(self._row_anchors), self._lanes, self._cells+1))
 
         return group_cls
 
     def loss(self, group_cls, label):
-        cls = ultra_lanenet.similarity_loss.cls_loss(group_cls, label, self._cells+1)
+        predict = tf.nn.softmax(group_cls, axis=-1)
+        predict = tf.argmax(predict, axis=-1)
+
+        cls = ultra_lanenet.similarity_loss.cls_loss(group_cls, label)
         sim = ultra_lanenet.similarity_loss.similaryit_loss(group_cls)
         shp = ultra_lanenet.similarity_loss.structural_loss(group_cls)
 
-        return cls, sim, shp, tf.argmax(group_cls, axis=-1)
+        return cls, sim, shp, predict
 
     def create_train_pipe(self, pipe_handle, config, batch_size, trainable=True, reuse=False, file_name='train_files.txt'):
         train_data_handle = data_stream(config['image_path'], config['img_width'], config['img_height'], file_name, config['lanes'])
