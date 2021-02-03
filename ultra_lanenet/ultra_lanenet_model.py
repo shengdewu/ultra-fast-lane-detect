@@ -119,17 +119,18 @@ class ultra_lane():
                 for step in range(pipe['total_epoch']):
                     if step % pipe['img_epoch'] == 0:
                         epoch += 1
-                    _, total_loss, p, gs, lr, valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict = sess.run([train_op, pipe['total_loss'], precision, global_step, learning_rate, pipe['total_loss'], pipe['src_img'], pipe['label_img'], pipe['ground_cls'], pipe['predict']])
+                    _, total_loss, p, gs, lr, train_summary = sess.run([train_op, pipe['total_loss'], precision, global_step, learning_rate, train_summary_op])
 
-                    #summary_writer.add_summary(train_summary, global_step=gs)
+                    summary_writer.add_summary(train_summary, global_step=gs)
 
-                    #valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict = sess.run([valid_pipe['total_loss'], valid_pipe['src_img'], valid_pipe['label_img'], valid_pipe['ground_cls'], valid_pipe['predict']])
+                    valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict = sess.run([valid_pipe['total_loss'], valid_pipe['src_img'], valid_pipe['label_img'], valid_pipe['ground_cls'], valid_pipe['predict']])
                     self.match_coordinate(valid_src_img.astype(np.uint8), val_label_img, valid_ground_cls, valid_predict, save_path, epoch)
                     print('train model: gs={},  loss={}, precision={}, lr={}, valid_loss={}'.format(gs, total_loss, p, lr, valid_total_loss))
+                    logging.info('train model: gs={},  loss={}, precision={}, lr={}, valid_loss={}'.format(gs, total_loss, p, lr, valid_total_loss))
 
                     if step > config['update_mode_freq'] and step % config['update_mode_freq'] == 0:
-                        #saver.save(sess, model_path, global_step=gs)
-                        print('update model loss from {} :{}'.format(step, total_loss))
+                        saver.save(sess, model_path, global_step=gs)
+                        logging.info('update model loss from {} :{}'.format(step, total_loss))
 
         return
 
