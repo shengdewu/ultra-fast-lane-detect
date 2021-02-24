@@ -51,6 +51,13 @@ class ultra_lane():
 
         return cls, sim, shp, predict
 
+    def calc_precision(self, pipe):
+        b, w, h, c = pipe['ground_cls'].get_shape().as_list()
+        ground_label = tf.cast(tf.reshape(pipe['ground_cls'], (b, w, h)), dtype=pipe['predict'].dtype)
+        correct_label = tf.cast(tf.equal(ground_label, pipe['predict']), dtype=tf.float32)
+        p = tf.reduce_sum(correct_label) / (1.0 * w * h * b * c)
+        return p
+
     def create_train_pipe(self, pipe_handle, config, batch_size, trainable=True, reuse=False, file_name='train_files.txt'):
         train_data_handle = data_stream(config['image_path'], config['img_width'], config['img_height'], file_name, config['lanes'])
         src_tensor, label_tensor, cls_tensor, total_img = train_data_handle.create_img_tensor()
@@ -85,10 +92,7 @@ class ultra_lane():
             total_loss_summary = tf.summary.scalar(name='total-loss', tensor=pipe['total_loss'])
             cls_loss_summary = tf.summary.scalar(name='cls-loss', tensor=pipe['cls_loss'])
 
-            b, w, h, c = pipe['ground_cls'].get_shape().as_list()
-            ground_label = tf.cast(tf.reshape(pipe['ground_cls'], (b, w, h)), dtype=pipe['predict'].dtype)
-            correct_label = tf.cast(tf.equal(ground_label, pipe['predict']), dtype=tf.float32)
-            precision = tf.reduce_sum(correct_label) / (1.0*w*h*b*c)
+            precision = self.calc_precision(pipe)
             precision_summary = tf.summary.scalar(name='precision', tensor=precision)
 
             global_step = tf.train.create_global_step()
@@ -107,6 +111,8 @@ class ultra_lane():
             val_total_loss_summary = tf.summary.scalar(name='val-total-loss', tensor=valid_pipe['total_loss'])
             val_cls_loss_summary = tf.summary.scalar(name='val-cls-loss', tensor=valid_pipe['cls_loss'])
 
+            valid_precision = precision = self.calc_precision(valid_pipe)
+
             train_summary_op = tf.summary.merge([total_loss_summary, cls_loss_summary, ls_summary, val_total_loss_summary, val_cls_loss_summary, precision_summary])
 
             saver = tf.train.Saver()
@@ -123,10 +129,10 @@ class ultra_lane():
 
                     summary_writer.add_summary(train_summary, global_step=gs)
 
-                    valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict = sess.run([valid_pipe['total_loss'], valid_pipe['src_img'], valid_pipe['label_img'], valid_pipe['ground_cls'], valid_pipe['predict']])
+                    valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict, valid_p = sess.run([valid_pipe['total_loss'], valid_pipe['src_img'], valid_pipe['label_img'], valid_pipe['ground_cls'], valid_pipe['predict'], valid_precision])
                     self.match_coordinate(valid_src_img.astype(np.uint8), val_label_img, valid_ground_cls, valid_predict, save_path, epoch)
-                    print('train model: gs={},  loss={}, precision={}, lr={}, valid_loss={}'.format(gs, total_loss, p, lr, valid_total_loss))
-                    logging.info('train model: gs={},  loss={}, precision={}, lr={}, valid_loss={}'.format(gs, total_loss, p, lr, valid_total_loss))
+                    print('train model: gs={},  loss={}, precision={}/{}, lr={}, valid_loss={}'.format(gs, total_loss, p, valid_p, lr, valid_total_loss))
+                    logging.info('train model: gs={},  loss={}, precision={}/{}, lr={}, valid_loss={}'.format(gs, total_loss, p, valid_p, lr, valid_total_loss))
 
                     if step > config['update_mode_freq'] and step % config['update_mode_freq'] == 0:
                         saver.save(sess, model_path, global_step=gs)
