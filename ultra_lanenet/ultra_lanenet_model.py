@@ -96,8 +96,8 @@ class ultra_lane():
             precision_summary = tf.summary.scalar(name='precision', tensor=precision)
 
             global_step = tf.train.create_global_step()
-            #learning_rate = tf.train.exponential_decay(config['learning_rate'], global_step, config['decay_steps'], config['decay_rate'])
-            learning_rate = util.CosineAnnealing.cosine_decay(global_step, config['warmup_iter'], pipe['total_epoch'], config['end_learning_rate'], config['learning_rate'])
+            learning_rate = tf.train.exponential_decay(config['learning_rate'], global_step, config['decay_steps'], config['decay_rate'])
+            #learning_rate = util.CosineAnnealing.cosine_decay(global_step, config['warmup_iter'], pipe['total_epoch'], config['end_learning_rate'], config['learning_rate'])
             optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
             train_op = slim.learning.create_train_op(pipe['total_loss'], optimizer)
             ls_summary = tf.summary.scalar(name='learning-rate', tensor=learning_rate)
@@ -128,15 +128,14 @@ class ultra_lane():
                     _, total_loss, p, gs, lr, train_summary = sess.run([train_op, pipe['total_loss'], precision, global_step, learning_rate, train_summary_op])
 
                     summary_writer.add_summary(train_summary, global_step=gs)
-
-                    valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict, valid_p = sess.run([valid_pipe['total_loss'], valid_pipe['src_img'], valid_pipe['label_img'], valid_pipe['ground_cls'], valid_pipe['predict'], valid_precision])
-                    self.match_coordinate(valid_src_img.astype(np.uint8), val_label_img, valid_ground_cls, valid_predict, save_path, epoch)
-                    print('train model: gs={},  loss={}, precision={}/{}, lr={}, valid_loss={}'.format(gs, total_loss, p, valid_p, lr, valid_total_loss))
-                    logging.info('train model: gs={},  loss={}, precision={}/{}, lr={}, valid_loss={}'.format(gs, total_loss, p, valid_p, lr, valid_total_loss))
+                    logging.info('train model: gs={},  loss={}, precision={}, lr={}'.format(gs, total_loss, p, lr))
 
                     if step > config['update_mode_freq'] and step % config['update_mode_freq'] == 0:
+                        valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict, valid_p = sess.run([valid_pipe['total_loss'], valid_pipe['src_img'], valid_pipe['label_img'], valid_pipe['ground_cls'], valid_pipe['predict'], valid_precision])
+                        self.match_coordinate(valid_src_img.astype(np.uint8), val_label_img, valid_ground_cls, valid_predict, save_path, epoch)
+                        # print('train model: gs={},  loss={}, precision={}/{}, lr={}, valid_loss={}'.format(gs, total_loss, p, valid_p, lr, valid_total_loss))
+                        logging.info('valid model: gs={},  loss={}, precision={}/{}, lr={}, valid_loss={}'.format(gs, total_loss, p, valid_p, lr, valid_total_loss))
                         saver.save(sess, model_path, global_step=gs)
-                        logging.info('update model loss from {} :{}'.format(step, total_loss))
 
         return
 
