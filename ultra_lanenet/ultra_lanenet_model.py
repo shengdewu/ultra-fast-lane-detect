@@ -111,7 +111,7 @@ class ultra_lane():
             val_total_loss_summary = tf.summary.scalar(name='val-total-loss', tensor=valid_pipe['total_loss'])
             val_cls_loss_summary = tf.summary.scalar(name='val-cls-loss', tensor=valid_pipe['cls_loss'])
 
-            valid_precision = precision = self.calc_precision(valid_pipe)
+            valid_precision = self.calc_precision(valid_pipe)
 
             train_summary_op = tf.summary.merge([total_loss_summary, cls_loss_summary, ls_summary, val_total_loss_summary, val_cls_loss_summary, precision_summary])
 
