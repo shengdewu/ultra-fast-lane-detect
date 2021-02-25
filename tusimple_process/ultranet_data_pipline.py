@@ -98,7 +98,7 @@ class ultranet_data_pipline:
             cv2.destroyAllWindows()
         return label_image, bin_label
 
-    def generate_data(self, data_path, out_path, show=False, shape=(720, 1280), rate=1):
+    def generate_data(self, data_path, out_path, show=False, shape=(720, 1280), rate=0.8):
         '''
         :param show: 是否显示
         :param rate: 训练集占有比例
@@ -191,6 +191,7 @@ class ultranet_data_pipline:
 
                     total_files.append(file_out)
 
+        np.random.shuffle(total_files)
         train_len = math.ceil(len(total_files) * rate)
         with open(out_path+'/train_files.txt', 'w') as train_handle:
             for index in range(train_len):
