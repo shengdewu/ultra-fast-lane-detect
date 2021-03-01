@@ -89,7 +89,7 @@ class tusimple_label:
         # src_img = np.divide(src_img, (0.229, 0.224, 0.225))
         return cls_label
 
-    def rescontruct(self, cls_label, img, show=False):
+    def rescontruct(self, cls_label, img, show_name=None):
         color = [(255, 0, 0), (0,255,0), (0, 0, 255), (255, 255, 0)]
         h, w, c = img.shape
         row_anchors = self._row_anchors
@@ -104,8 +104,8 @@ class tusimple_label:
                 if l[0] == -2:
                     continue
                 cv2.circle(img, l, radius=3, color=color[i], thickness=3)
-        if show:
-            cv2.imshow('img', img)
+        if show_name is not None:
+            cv2.imshow(show_name, img)
             cv2.waitKey()
             cv2.destroyAllWindows()
         return img

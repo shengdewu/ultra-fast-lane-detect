@@ -98,9 +98,8 @@ class ultranet_data_pipline:
             cv2.destroyAllWindows()
         return label_image, bin_label
 
-    def generate_data(self, data_path, out_path, show=False, shape=(720, 1280), rate=0.8):
+    def generate_data(self, data_path, out_path, shape=(720, 1280), rate=0.8):
         '''
-        :param show: 是否显示
         :param rate: 训练集占有比例
         :param data_path: tuSimple 数据集路径
         :param out_path: 产生结果输出路径
@@ -163,33 +162,22 @@ class ultranet_data_pipline:
                         continue
 
                     name_pre = raw_file[:raw_file.find('.jpg')].replace('/', '-')
-                    img_name = raw_file.replace('/', '-')
-                    label_name = name_pre + '-label.png'
-                    cls_name = name_pre + '-cls.png'
 
-                    cv2.imwrite(out_path + '/' + img_path + '/' + label_name, label_image)
-                    copyfile(image_path, out_path + '/' + img_path + '/' + img_name)
-
-                    file_out = ''
                     if self.cls_label_handle is None:
-                        file_out = '{} {} {}\n'.format(img_path + '/' + img_name, img_path + '/' + label_name, ''.join(list(map(str, bin_label))))
+                        img_name = raw_file.replace('/', '-')
+                        label_name = name_pre + '-label.png'
+                        copyfile(image_path, out_path + '/' + img_path + '/' + img_name)
+                        total_files.append('{} {} {}\n'.format(img_path + '/' + img_name, img_path + '/' + label_name, ''.join(list(map(str, bin_label)))))
                     else:
                         src_img = cv2.imread(image_path)
-                        h, w, c = src_img.shape
-                        cls_label = self.cls_label_handle.create_label(label_image, w)
-
-                        if show:
-                            self.cls_label_handle.rescontruct(cls_label, src_img, True)
-                            self.cls_label_handle.rescontruct(cls_label, src_img, True)
-
-                        idx = np.where(cls_label > 255)
-                        if idx[0].shape[0] > 0 or idx[1].shape[0] > 0:
-                            print('{} beyond 255'.format(line, ))
-
-                        cv2.imwrite(out_path + '/' + img_path + '/' + cls_name, cls_label)
-                        file_out = '{} {} {} {}\n'.format(img_path + '/' + img_name, img_path + '/' + label_name, img_path + '/' + cls_name, ''.join(list(map(str, bin_label))))
-
-                    total_files.append(file_out)
+                        file_out = self.convert(label_image.copy(), src_img.copy(), out_path, img_path, name_pre, bin_label)
+                        total_files.append(file_out)
+                        angle = np.random.randint(4, 10)
+                        rot_img = self.rotation(src_img.copy(), angle)
+                        rot_label = self.rotation(label_image.copy(), angle)
+                        rot_label = self.refine(rot_label)
+                        file_out = self.convert(rot_label.copy(), rot_img.copy(), out_path, img_path, name_pre+'-rot', bin_label)
+                        total_files.append(file_out)
 
         np.random.shuffle(total_files)
         train_len = math.ceil(len(total_files) * rate)
@@ -203,6 +191,49 @@ class ultranet_data_pipline:
 
         return
 
+    def rotation(self, image, angle, center=None, scale=1.0):
+        (h, w) = image.shape[:2]
+
+        # if the center is None, initialize it as the center of
+        # the image
+        if center is None:
+            center = (w // 2, h // 2)
+
+        # perform the rotation
+        M = cv2.getRotationMatrix2D(center, angle, scale)
+        rotated = cv2.warpAffine(image, M, (w, h))
+        return rotated
+
+    def refine(self, image):
+        (h, w) = image.shape[:2]
+        for l in range(2, 5):
+            idx = np.where(image == l)
+            for x, y in zip(idx[0], idx[1]):
+                win = image[x-3:x+3, y-3:y+3]
+                v = np.max(win)
+                win[np.where(win < v)] = 0
+        return image
+
+    def convert(self, label_image, src_img, out_path, img_path, name_pre, bin_label, show_name=None):
+        h, w, c = src_img.shape
+        cls_label = self.cls_label_handle.create_label(label_image, w)
+
+        if show_name:
+            self.cls_label_handle.rescontruct(cls_label, src_img.copy(), show_name)
+
+        idx = np.where(cls_label > 255)
+        if idx[0].shape[0] > 0 or idx[1].shape[0] > 0:
+            print('beyond 255')
+
+        label_name = name_pre + '-label.png'
+        cls_name = name_pre + '-cls.png'
+        img_name = name_pre + '-img.png'
+        cv2.imwrite(out_path + '/' + img_path + '/' + label_name, label_image)
+        cv2.imwrite(out_path + '/' + img_path + '/' + cls_name, cls_label)
+        cv2.imwrite(out_path + '/' + img_path + '/' + img_name, src_img)
+        file_out = '{} {} {} {}\n'.format(img_path + '/' + img_name, img_path + '/' + label_name, img_path + '/' + cls_name, ''.join(list(map(str, bin_label))))
+        return file_out
+
 if __name__ == '__main__':
     lanenet_data_provide = ultranet_data_pipline(True)
-    lanenet_data_provide.generate_data('F:/tuSimpleDataSetSource/train/', 'F:/ultra-source-1/')
+    lanenet_data_provide.generate_data('F:/tuSimpleDataSetSource/train/', 'F:/ultra-source-3/')
