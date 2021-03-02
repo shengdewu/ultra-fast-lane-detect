@@ -12,6 +12,7 @@ from tusimple_process.create_label import tusimple_label
 import os
 import util.CosineAnnealing
 import math
+from resnet.nn import nn
 
 
 class ultra_lane():
@@ -23,21 +24,22 @@ class ultra_lane():
         self.cls_label_handle = tusimple_label()
         return
 
-    def make_net(self, x, trainable=True, reuse=False):
-        resnet_model = resnet()
-        resnet_model.resnet18(x, trainable, reuse)
-        x2 = resnet_model.layer2
-        x3 = resnet_model.layer3
-        x4 = resnet_model.layer4
+    def make_net(self, x, l2_weight_decay, trainable=True, reuse=False):
+        with slim.arg_scope(nn.nn.enet_arg_scope(weight_decay=l2_weight_decay)):
+            resnet_model = resnet()
+            resnet_model.resnet18(x, trainable, reuse)
+            x2 = resnet_model.layer2
+            x3 = resnet_model.layer3
+            x4 = resnet_model.layer4
 
-        total_dims = (self._cells + 1) * len(self._row_anchors) * self._lanes
-        fc = slim.conv2d(x4, 8, [1, 1], 1, padding='SAME', reuse=reuse, scope='fc-1')
-        fc = tf.reshape(fc, shape=(-1, 1800))
-        fc = tf.contrib.layers.fully_connected(fc, 2048, scope='line1', reuse=reuse, activation_fn=None, trainable=trainable)
-        fc = tf.nn.relu(fc)
-        fc = tf.contrib.layers.fully_connected(fc, total_dims, scope='line2', reuse=reuse, activation_fn=None, trainable=trainable)
+            total_dims = (self._cells + 1) * len(self._row_anchors) * self._lanes
+            fc = slim.conv2d(x4, 8, [1, 1], 1, padding='SAME', reuse=reuse, scope='fc-1')
+            fc = tf.reshape(fc, shape=(-1, 1800))
+            fc = tf.contrib.layers.fully_connected(fc, 2048, scope='line1', reuse=reuse, activation_fn=None, trainable=trainable)
+            fc = tf.nn.relu(fc)
+            fc = tf.contrib.layers.fully_connected(fc, total_dims, scope='line2', reuse=reuse, activation_fn=None, trainable=trainable)
 
-        group_cls = tf.reshape(fc, shape=(-1, len(self._row_anchors), self._lanes, self._cells+1))
+            group_cls = tf.reshape(fc, shape=(-1, len(self._row_anchors), self._lanes, self._cells+1))
 
         return group_cls
 
@@ -71,8 +73,9 @@ class ultra_lane():
         src_tensor, label_tensor, cls_tensor, total_img = train_data_handle.create_img_tensor()
         #train_data_handle.pre_process_img(src_tensor[0], label_tensor[0], cls_tensor[0])
         src_img_train_queue, label_queue, ground_cls_queue, src_img_queue = pipe_handle.make_pipe(batch_size, (src_tensor, label_tensor, cls_tensor), train_data_handle.pre_process_img)
-        group_cls = self.make_net(src_img_train_queue, trainable, reuse)
-        reg_loss = self.regularization(config['reg_loss_w'])
+        group_cls = self.make_net(src_img_train_queue, config['reg_loss_w'], trainable, reuse)
+        #reg_loss = self.regularization(config['reg_loss_w'])
+        reg_loss = l2_reg_loss = tf.losses.get_regularization_loss()
         cls_loss_tensor, sim_loss_tensor, shp_loss_tensor, predict_rows = self.loss(group_cls, ground_cls_queue)
         total_loss_tensor = cls_loss_tensor + sim_loss_tensor * config['sim_loss_w'] + shp_loss_tensor * config['shp_loss_w'] + reg_loss
         tensor = dict()
