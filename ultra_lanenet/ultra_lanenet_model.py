@@ -58,16 +58,28 @@ class ultra_lane():
         p = tf.reduce_sum(correct_label) / (1.0 * w * h * b * c)
         return p
 
+    def regularization(self):
+        reg_loss = None
+        for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
+            if v.name.find('weights') != -1:
+                if reg_loss is None:
+                    reg_loss = tf.contrib.layers.l2_regularizer(v)
+                else:
+                    reg_loss += tf.contrib.layers.l2_regularizer(v)
+        return reg_loss
+
     def create_train_pipe(self, pipe_handle, config, batch_size, trainable=True, reuse=False, file_name='train_files.txt'):
         train_data_handle = data_stream(config['image_path'], config['img_width'], config['img_height'], file_name, config['lanes'])
         src_tensor, label_tensor, cls_tensor, total_img = train_data_handle.create_img_tensor()
         #train_data_handle.pre_process_img(src_tensor[0], label_tensor[0], cls_tensor[0])
         src_img_train_queue, label_queue, ground_cls_queue, src_img_queue = pipe_handle.make_pipe(batch_size, (src_tensor, label_tensor, cls_tensor), train_data_handle.pre_process_img)
         group_cls = self.make_net(src_img_train_queue, trainable, reuse)
+        reg_loss = self.regularization()
         cls_loss_tensor, sim_loss_tensor, shp_loss_tensor, predict_rows = self.loss(group_cls, ground_cls_queue)
-        total_loss_tensor = cls_loss_tensor + sim_loss_tensor * config['sim_loss_w'] + shp_loss_tensor * config['shp_loss_w']
+        total_loss_tensor = cls_loss_tensor + sim_loss_tensor * config['sim_loss_w'] + shp_loss_tensor * config['shp_loss_w'] + reg_loss * config['reg_loss_w']
         tensor = dict()
         tensor['total_loss'] = total_loss_tensor
+        tensor['reg_loss'] = reg_loss
         tensor['cls_loss'] = cls_loss_tensor
         tensor['sim_loss'] = sim_loss_tensor
         tensor['shp_loss'] = shp_loss_tensor
@@ -101,10 +113,6 @@ class ultra_lane():
             optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
             train_op = slim.learning.create_train_op(pipe['total_loss'], optimizer)
             ls_summary = tf.summary.scalar(name='learning-rate', tensor=learning_rate)
-
-            with open(os.path.join(model_path, 'tf_param.txt'), 'w') as w:
-                for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
-                    w.write('{}\n'.format(v))
 
             #valid
             valid_pipe = self.create_train_pipe(pipe_handle, config, config['eval_batch_size'], False, True, 'valid_files.txt')

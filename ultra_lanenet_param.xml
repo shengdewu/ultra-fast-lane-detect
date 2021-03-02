@@ -16,8 +16,8 @@
 		<update_mode_freq>50</update_mode_freq>
 		<sim_loss_w>1.0</sim_loss_w>
 		<shp_loss_w>0.0</shp_loss_w>
+		<reg_loss_w>0.01</reg_loss_w>
 		<warmup_iter>100</warmup_iter>
-		<lanes></lanes>
     </optimize>
 	<result>
         <image_path>F:/ultra-source-1</image_path>
