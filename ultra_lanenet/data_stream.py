@@ -5,14 +5,13 @@ import tensorflow as tf
 import numpy as np
 
 class data_stream:
-    def __init__(self, root, img_w, img_h, file_name='train_files.txt', lanes=''):
+    def __init__(self, root, img_w, img_h, file_name='train_files.txt'):
         self._root = root
         self._file_name = file_name
         self._img_w = img_w
         self._img_h = img_h
         self._label_w = 4
         self._label_h = 56
-        self._lanes = lanes
         return
 
     def create_img_tensor(self):
@@ -25,8 +24,6 @@ class data_stream:
                 if not line:
                     break
                 names = line.strip('\n').split(' ')
-                if self._lanes is not None and self._lanes != names[3]:
-                    continue
 
                 img_path = self._root + '/' + names[0]
                 label_path = self._root + '/' + names[1]
