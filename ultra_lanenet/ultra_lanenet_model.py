@@ -25,7 +25,7 @@ class ultra_lane():
         return
 
     def make_net(self, x, l2_weight_decay, trainable=True, reuse=False):
-        with slim.arg_scope(nn.nn.enet_arg_scope(weight_decay=l2_weight_decay)):
+        with slim.arg_scope(nn.enet_arg_scope(weight_decay=l2_weight_decay)):
             resnet_model = resnet()
             resnet_model.resnet18(x, trainable, reuse)
             x2 = resnet_model.layer2
