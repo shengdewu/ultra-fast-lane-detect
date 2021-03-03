@@ -24,22 +24,21 @@ class ultra_lane():
         self.cls_label_handle = tusimple_label()
         return
 
-    def make_net(self, x, l2_weight_decay, trainable=True, reuse=False):
-        with slim.arg_scope(nn.enet_arg_scope(weight_decay=l2_weight_decay)):
-            resnet_model = resnet()
-            resnet_model.resnet18(x, trainable, reuse)
-            x2 = resnet_model.layer2
-            x3 = resnet_model.layer3
-            x4 = resnet_model.layer4
+    def make_net(self, x, trainable=True, reuse=False):
+        resnet_model = resnet()
+        resnet_model.resnet18(x, trainable, reuse)
+        x2 = resnet_model.layer2
+        x3 = resnet_model.layer3
+        x4 = resnet_model.layer4
 
-            total_dims = (self._cells + 1) * len(self._row_anchors) * self._lanes
-            fc = slim.conv2d(x4, 8, [1, 1], 1, padding='SAME', reuse=reuse, scope='fc-1')
-            fc = tf.reshape(fc, shape=(-1, 1800))
-            fc = tf.contrib.layers.fully_connected(fc, 2048, scope='line1', reuse=reuse, activation_fn=None, trainable=trainable)
-            fc = tf.nn.relu(fc)
-            fc = tf.contrib.layers.fully_connected(fc, total_dims, scope='line2', reuse=reuse, activation_fn=None, trainable=trainable)
+        total_dims = (self._cells + 1) * len(self._row_anchors) * self._lanes
+        fc = slim.conv2d(x4, 8, [1, 1], 1, padding='SAME', trainable=trainable, reuse=reuse, scope='fc-1')
+        fc = tf.reshape(fc, shape=(-1, 1800))
+        fc = tf.contrib.layers.fully_connected(fc, 2048, scope='line1', reuse=reuse, activation_fn=None, trainable=trainable)
+        fc = tf.nn.relu(fc)
+        fc = tf.contrib.layers.fully_connected(fc, total_dims, scope='line2', reuse=reuse, activation_fn=None, trainable=trainable)
 
-            group_cls = tf.reshape(fc, shape=(-1, len(self._row_anchors), self._lanes, self._cells+1))
+        group_cls = tf.reshape(fc, shape=(-1, len(self._row_anchors), self._lanes, self._cells+1))
 
         return group_cls
 
@@ -60,6 +59,20 @@ class ultra_lane():
         p = tf.reduce_sum(correct_label) / (1.0 * w * h * b * c)
         return p
 
+    def calc_top1(self, pipe, pixle):
+        b, w, h, c = pipe['ground_cls'].get_shape().as_list()
+        ground_label = tf.cast(tf.reshape(pipe['ground_cls'], (b, w, h)), dtype=tf.float32)
+
+        value = tf.abs(tf.subtract(ground_label, tf.cast(pipe['predict'], tf.float32)))
+        zero = tf.zeros_like(value)
+        one = tf.ones_like(value)
+        value = tf.where(value < pixle, x=one, y=zero)
+        value = tf.cast(value, dtype=tf.float32)
+
+        p = tf.reduce_sum(value) / (1.0 * w * h * b * c)
+
+        return p
+
     def regularization(self, scale):
         regularizer = tf.contrib.layers.l2_regularizer(scale)
         reg_weight = list()
@@ -73,9 +86,9 @@ class ultra_lane():
         src_tensor, label_tensor, cls_tensor, total_img = train_data_handle.create_img_tensor()
         #train_data_handle.pre_process_img(src_tensor[0], label_tensor[0], cls_tensor[0])
         src_img_train_queue, label_queue, ground_cls_queue, src_img_queue = pipe_handle.make_pipe(batch_size, (src_tensor, label_tensor, cls_tensor), train_data_handle.pre_process_img)
-        group_cls = self.make_net(src_img_train_queue, config['reg_loss_w'], trainable, reuse)
-        #reg_loss = self.regularization(config['reg_loss_w'])
-        reg_loss = l2_reg_loss = tf.losses.get_regularization_loss()
+        group_cls = self.make_net(src_img_train_queue, trainable, reuse)
+        reg_loss = self.regularization(config['reg_loss_w'])
+        #reg_loss = l2_reg_loss = tf.losses.get_regularization_loss()
         cls_loss_tensor, sim_loss_tensor, shp_loss_tensor, predict_rows = self.loss(group_cls, ground_cls_queue)
         total_loss_tensor = cls_loss_tensor + sim_loss_tensor * config['sim_loss_w'] + shp_loss_tensor * config['shp_loss_w'] + reg_loss
         tensor = dict()
@@ -121,6 +134,7 @@ class ultra_lane():
             val_cls_loss_summary = tf.summary.scalar(name='val-cls-loss', tensor=valid_pipe['cls_loss'])
 
             valid_precision = self.calc_precision(valid_pipe)
+            valid_pixle = self.calc_top1(valid_pipe, 0.5)
 
             train_summary_op = tf.summary.merge([total_loss_summary, cls_loss_summary, ls_summary, val_total_loss_summary, val_cls_loss_summary, precision_summary])
 
@@ -140,10 +154,10 @@ class ultra_lane():
                     #logging.info('train model: gs={},  loss={}, precision={}, lr={}'.format(gs, total_loss, p, lr))
 
                     if step > config['update_mode_freq'] and step % config['update_mode_freq'] == 0:
-                        valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict, valid_p = sess.run([valid_pipe['total_loss'], valid_pipe['src_img'], valid_pipe['label_img'], valid_pipe['ground_cls'], valid_pipe['predict'], valid_precision])
+                        valid_total_loss, valid_src_img, val_label_img, valid_ground_cls, valid_predict, valid_p, valid_pi = sess.run([valid_pipe['total_loss'], valid_pipe['src_img'], valid_pipe['label_img'], valid_pipe['ground_cls'], valid_pipe['predict'], valid_precision, valid_pixle])
                         self.match_coordinate(valid_src_img.astype(np.uint8), val_label_img, valid_ground_cls, valid_predict, save_path, epoch)
                         # print('train model: gs={},  loss={}, precision={}/{}, lr={}, valid_loss={}'.format(gs, total_loss, p, valid_p, lr, valid_total_loss))
-                        logging.info('valid model: gs={},  loss={}, reg_loss={}, precision={}/{}, lr={}, valid_loss={}'.format(gs, total_loss, reg_loss, p, valid_p, lr, valid_total_loss))
+                        logging.info('valid model: gs={},  loss={}, reg_loss={}, precision={}/{}/{}, lr={}, valid_loss={}'.format(gs, total_loss, reg_loss, p, valid_p, valid_pi, lr, valid_total_loss))
                         saver.save(sess, model_path, global_step=gs)
 
         return
